@@ -1,5 +1,10 @@
 <!-- mcp-name: io.github.taylorwilsdon/workspace-mcp -->
 
+> [!IMPORTANT]
+> **Fork changes (manee)** — this fork differs from upstream `workspace-mcp` as follows:
+> - **Calendar writes never email attendees by default.** Every Calendar API write (`manage_event` create/update/delete/rsvp, including "this and following" recurring splits, plus `manage_out_of_office` and `manage_focus_time`) sends `sendUpdates=none`.
+> - **`WORKSPACE_MCP_CALENDAR_SEND_UPDATES`** (`all` | `externalOnly` | `none`, default `none`) sets the default and the ceiling. A caller-supplied `send_updates` above it is clamped down to it with a warning logged; invalid values fall back to `none`.
+
 <div align="center">
 
 # <span style="color:#cad8d9">Google Workspace MCP Server</span> <img src="https://github.com/user-attachments/assets/b89524e4-6e6e-49e6-ba77-00d6df0c6e5c" width="80" align="right" />

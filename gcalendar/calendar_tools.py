@@ -34,6 +34,7 @@ from gcalendar.calendar_helpers import (
     _status_event_time_entry,
     _validate_auto_decline_mode,
     _validate_chat_status,
+    resolve_send_updates,
 )
 
 from mcp.types import ToolAnnotations
@@ -365,12 +366,13 @@ async def _create_event_impl(
     guests_can_modify: Optional[bool] = None,
     guests_can_invite_others: Optional[bool] = None,
     guests_can_see_other_guests: Optional[bool] = None,
-    send_updates: str = "all",
+    send_updates: Optional[str] = None,
     *,
     start_timezone: Optional[str] = None,
     end_timezone: Optional[str] = None,
 ) -> str:
     """Internal implementation for creating a calendar event."""
+    send_updates = resolve_send_updates(send_updates)
     logger.info(
         f"[create_event] Invoked. Email: '{user_google_email}', summary_len={len(summary) if summary else 0}"
     )
@@ -537,13 +539,14 @@ async def _modify_event_impl(
     guests_can_invite_others: Optional[bool] = None,
     guests_can_see_other_guests: Optional[bool] = None,
     attachments: Optional[Union[str, List[str]]] = None,
-    send_updates: str = "all",
+    send_updates: Optional[str] = None,
     *,
     start_timezone: Optional[str] = None,
     end_timezone: Optional[str] = None,
     this_and_following: bool = False,
 ) -> str:
     """Internal implementation for modifying a calendar event."""
+    send_updates = resolve_send_updates(send_updates)
     logger.info(
         f"[modify_event] Invoked. Email: '{user_google_email}', Event ID: {event_id}"
     )
@@ -787,9 +790,10 @@ async def _delete_event_impl(
     user_google_email: str,
     event_id: str,
     calendar_id: str = "primary",
-    send_updates: str = "all",
+    send_updates: Optional[str] = None,
 ) -> str:
     """Internal implementation for deleting a calendar event."""
+    send_updates = resolve_send_updates(send_updates)
     logger.info(
         f"[delete_event] Invoked. Email: '{user_google_email}', Event ID: {event_id}"
     )
@@ -844,9 +848,10 @@ async def _rsvp_event_impl(
     response: str,
     calendar_id: str = "primary",
     comment: Optional[str] = None,
-    send_updates: str = "all",
+    send_updates: Optional[str] = None,
 ) -> str:
     """Internal implementation for responding to a calendar event invitation."""
+    send_updates = resolve_send_updates(send_updates)
     valid_responses = {"accepted", "declined", "tentative", "needsAction"}
     if response not in valid_responses:
         raise UserInputError(
@@ -1003,7 +1008,7 @@ async def manage_event(
         guests_can_see_other_guests (Optional[bool]): Whether attendees can see other guests.
         response (Optional[str]): RSVP response — "accepted", "declined", "tentative", or "needsAction" (rsvp action only).
         rsvp_comment (Optional[str]): Optional message to include with the RSVP response (rsvp action only).
-        send_updates (Optional[str]): Notification behavior for create, update, delete, and rsvp — "all" (default), "externalOnly", or "none".
+        send_updates (Optional[str]): Notification behavior for create, update, delete, and rsvp — "all", "externalOnly", or "none". Defaults to and is capped by WORKSPACE_MCP_CALENDAR_SEND_UPDATES (default "none").
         this_and_following (bool): Update only. With event_id set to a recurring instance ID,
             applies the change to that instance and every later one by ending the original
             series before it and starting a new series there; earlier instances are kept.
@@ -1071,7 +1076,7 @@ async def manage_event(
             guests_can_invite_others=guests_can_invite_others,
             guests_can_see_other_guests=guests_can_see_other_guests,
             recurrence=recurrence,
-            send_updates=send_updates or "all",
+            send_updates=send_updates,
         )
     elif action_lower == "update":
         if not event_id:
@@ -1102,7 +1107,7 @@ async def manage_event(
             guests_can_invite_others=guests_can_invite_others,
             guests_can_see_other_guests=guests_can_see_other_guests,
             attachments=attachments,
-            send_updates=send_updates or "all",
+            send_updates=send_updates,
             this_and_following=this_and_following,
         )
     elif action_lower == "delete":
@@ -1113,7 +1118,7 @@ async def manage_event(
             user_google_email=user_google_email,
             event_id=event_id,
             calendar_id=calendar_id,
-            send_updates=send_updates or "all",
+            send_updates=send_updates,
         )
     elif action_lower == "rsvp":
         if not event_id:
@@ -1127,7 +1132,7 @@ async def manage_event(
             response=response,
             calendar_id=calendar_id,
             comment=rsvp_comment,
-            send_updates=send_updates or "all",
+            send_updates=send_updates,
         )
     else:
         raise UserInputError(
@@ -1178,7 +1183,13 @@ async def _create_ooo_event_impl(
 
     created_event = await asyncio.to_thread(
         lambda: (
-            service.events().insert(calendarId=calendar_id, body=event_body).execute()
+            service.events()
+            .insert(
+                calendarId=calendar_id,
+                body=event_body,
+                sendUpdates=resolve_send_updates(),
+            )
+            .execute()
         )
     )
 
@@ -1377,7 +1388,12 @@ async def _update_ooo_event_impl(
     updated_event = await asyncio.to_thread(
         lambda: (
             service.events()
-            .patch(calendarId=calendar_id, eventId=event_id, body=patch_body)
+            .patch(
+                calendarId=calendar_id,
+                eventId=event_id,
+                body=patch_body,
+                sendUpdates=resolve_send_updates(),
+            )
             .execute()
         )
     )
@@ -1436,7 +1452,13 @@ async def _delete_ooo_event_impl(
 
     await asyncio.to_thread(
         lambda: (
-            service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
+            service.events()
+            .delete(
+                calendarId=calendar_id,
+                eventId=event_id,
+                sendUpdates=resolve_send_updates(),
+            )
+            .execute()
         )
     )
 
@@ -1614,7 +1636,13 @@ async def _create_focus_time_event_impl(
 
     created_event = await asyncio.to_thread(
         lambda: (
-            service.events().insert(calendarId=calendar_id, body=event_body).execute()
+            service.events()
+            .insert(
+                calendarId=calendar_id,
+                body=event_body,
+                sendUpdates=resolve_send_updates(),
+            )
+            .execute()
         )
     )
 
@@ -1829,7 +1857,12 @@ async def _update_focus_time_event_impl(
     updated_event = await asyncio.to_thread(
         lambda: (
             service.events()
-            .patch(calendarId=calendar_id, eventId=event_id, body=patch_body)
+            .patch(
+                calendarId=calendar_id,
+                eventId=event_id,
+                body=patch_body,
+                sendUpdates=resolve_send_updates(),
+            )
             .execute()
         )
     )
@@ -1888,7 +1921,13 @@ async def _delete_focus_time_event_impl(
 
     await asyncio.to_thread(
         lambda: (
-            service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
+            service.events()
+            .delete(
+                calendarId=calendar_id,
+                eventId=event_id,
+                sendUpdates=resolve_send_updates(),
+            )
+            .execute()
         )
     )
 

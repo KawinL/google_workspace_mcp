@@ -49,7 +49,7 @@ async def test_rsvp_accepted():
     assert "accepted" in result
     patch_kwargs = service.events().patch.call_args[1]
     assert patch_kwargs["body"]["attendees"][0]["responseStatus"] == "accepted"
-    assert patch_kwargs["sendUpdates"] == "all"
+    assert patch_kwargs["sendUpdates"] == "none"
 
 
 @pytest.mark.asyncio

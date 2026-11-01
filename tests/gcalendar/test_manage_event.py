@@ -627,7 +627,7 @@ async def test_manage_event_this_and_following_splits_series():
                 "EXDATE;TZID=America/New_York:20260119T120000",
             ]
         },
-        sendUpdates="all",
+        sendUpdates="none",
     )
     inserted = events.insert.call_args.kwargs["body"]
     assert inserted["summary"] == "Weekly sync"

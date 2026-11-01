@@ -10,6 +10,7 @@ import contextlib
 import datetime
 import json
 import logging
+import os
 import re
 import uuid
 from dataclasses import dataclass
@@ -22,6 +23,47 @@ from googleapiclient.discovery import build
 from core.utils import UserInputError
 
 logger = logging.getLogger(__name__)
+
+# Ordered from least to most attendee email. Calendar writes never notify more
+# widely than WORKSPACE_MCP_CALENDAR_SEND_UPDATES allows (default: "none").
+SEND_UPDATES_LEVELS = ("none", "externalOnly", "all")
+SEND_UPDATES_ENV_VAR = "WORKSPACE_MCP_CALENDAR_SEND_UPDATES"
+DEFAULT_SEND_UPDATES = "none"
+
+
+def get_configured_send_updates() -> str:
+    """Return the deployment's sendUpdates ceiling from the environment."""
+    value = os.getenv(SEND_UPDATES_ENV_VAR, DEFAULT_SEND_UPDATES).strip()
+    if value not in SEND_UPDATES_LEVELS:
+        logger.warning(
+            f"Invalid {SEND_UPDATES_ENV_VAR}={value!r}; must be one of "
+            f"{list(SEND_UPDATES_LEVELS)}. Using '{DEFAULT_SEND_UPDATES}'."
+        )
+        return DEFAULT_SEND_UPDATES
+    return value
+
+
+def resolve_send_updates(requested: Optional[str] = None) -> str:
+    """Return the sendUpdates value for a Calendar write.
+
+    Defaults to the configured value and clamps a caller-supplied value down to it.
+    """
+    configured = get_configured_send_updates()
+    if requested is None:
+        return configured
+    if requested not in SEND_UPDATES_LEVELS:
+        raise UserInputError(
+            f"Invalid send_updates '{requested}'. Must be one of: "
+            f"{sorted(SEND_UPDATES_LEVELS)}"
+        )
+    if SEND_UPDATES_LEVELS.index(requested) > SEND_UPDATES_LEVELS.index(configured):
+        logger.warning(
+            f"send_updates='{requested}' exceeds {SEND_UPDATES_ENV_VAR}="
+            f"'{configured}'; clamping to '{configured}'."
+        )
+        return configured
+    return requested
+
 
 _WEEKDAYS = (
     "Monday",
